@@ -69,12 +69,9 @@ async def list_tasks(
     """
     base = select(TaskDB).where(TaskDB.is_deleted == False)
 
-    if current_user.role == UserRole.ADMIN:
+    if current_user.role == UserRole.ADMIN or current_user.role==UserRole.MANAGER:
         query = base
-    elif current_user.role == UserRole.MANAGER:
-        query = base.where(TaskDB.created_by_id == current_user.id)
     else:
-        # Employee sees only tasks assigned to them
         query = base.where(TaskDB.assign_id == current_user.id)
 
     result = await db.execute(query)

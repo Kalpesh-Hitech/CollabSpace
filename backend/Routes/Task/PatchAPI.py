@@ -70,90 +70,192 @@ async def assign_task(taskseed:TaskUpdateAssign,user:UserDB=Depends(RoleChecker(
 
     return existing_record
 @task_patch.patch("/update-task", response_model=TaskRead)
-async def updatetask(
+async def update_task(
     background_tasks: BackgroundTasks,
-    task_data: TaskUpdate,
-    user: UserDB = Depends(RoleChecker(["admin", "manager", "employee"])),
-    db: AsyncSession = Depends(async_get_db),
+    task_data       : TaskUpdate,
+    user            : UserDB       = Depends(RoleChecker(["admin", "manager", "employee"])),
+    db              : AsyncSession = Depends(async_get_db),
 ):
-    query = select(TaskDB).where(
-        TaskDB.id == task_data.task_id, TaskDB.is_deleted == False
-    )
-    existing_record = await db.execute(query)
-    existing_record = existing_record.scalars().first()
+    task = (await db.execute(
+        select(TaskDB).where(TaskDB.id == task_data.task_id, TaskDB.is_deleted == False)
+    )).scalars().first()
 
-    if not existing_record:
+    if not task:
         raise HTTPException(status_code=404, detail="task nhi h")
 
-    if existing_record.created_by_id != user.id and user.role == "manager":
-        raise HTTPException(
-            status_code=403, detail="apna task dekho bhai, dusre me nhi aana"
-        )
+    if task.created_by_id != user.id and user.role == "manager":
+        raise HTTPException(status_code=403, detail="apna task dekho bhai, dusre me nhi aana")
+
+    # ── Read fields BEFORE any commit ─────────────────────────────────────────
+    user_email    = user.email
+    user_id       = user.id
+    user_name     = user.name
+    user_role     = user.role
+    old_assignee  = task.assign_id   # track if reassignment happens
+    old_status    = task.status
+    task_id       = task.id
+    task_title    = task.title       # used in notification if title not changing
+
+    # ── Email trigger: employee marking task complete ─────────────────────────
     if (
         task_data.status
         and task_data.status.lower() == "complete"
-        and existing_record.status != "complete"
-        and user.role == "employee"
+        and str(old_status).lower() != "complete"
+        and user_role == "employee"
     ):
-        user_email = user.email
-        task_title = task_data.title or existing_record.title
-        background_tasks.add_task(
-            send_task_completion_email, user.email, existing_record.title
-        )
-        print(f"DEBUG: Email task added for {user_email} regarding {task_title}")
-    if user.role == "admin" or user.role == "manager":
-        if task_data.title:
-            existing_record.title = task_data.title
-        if task_data.description:
-            existing_record.description = task_data.description
-        if task_data.priority:
-            existing_record.priority = task_data.priority
-        if task_data.assign_id:
-            existing_record.assignee_id = task_data.assign_id
-    if task_data.status:
-        existing_record.status = task_data.status
-    await db.commit()
-    await db.refresh(existing_record)
-    return existing_record
+        background_tasks.add_task(send_task_completion_email, user_email, task_title)
 
+    # ── Apply field updates ───────────────────────────────────────────────────
+    if user_role in ("admin", "manager"):
+        if task_data.title:
+            task.title       = task_data.title
+            task_title       = task_data.title   # keep in sync for notification
+        if task_data.description:
+            task.description = task_data.description
+        if task_data.priority:
+            task.priority    = task_data.priority
+        if task_data.team_id:
+            task.team_id     = task_data.team_id
+
+        # ── Reassign logic ────────────────────────────────────────────────────
+        if task_data.assign_id and str(task_data.assign_id) != str(old_assignee or ""):
+            # Validate new assignee exists
+            new_assignee = (await db.execute(
+                select(UserDB).where(
+                    UserDB.id == task_data.assign_id,
+                    UserDB.is_active == True,
+                )
+            )).scalars().first()
+            if not new_assignee:
+                raise HTTPException(status_code=404, detail="Assignee user not found")
+
+            task.assign_id    = task_data.assign_id
+            new_assignee_id   = new_assignee.id   # plain var before commit
+
+    if task_data.status:
+        task.status = task_data.status
+
+    await db.commit()
+    await db.refresh(task)
+
+    # ── Notify new assignee if reassigned ─────────────────────────────────────
+    # All values are plain Python — safe after commit
+    if (
+        user_role in ("admin", "manager")
+        and task_data.assign_id
+        and str(task_data.assign_id) != str(old_assignee or "")
+    ):
+        task_priority_val = task.priority.value  # safe — just refreshed
+        await create_notification(
+            db           = db,
+            recipient_id = task_data.assign_id,
+            sender_id    = user_id,
+            notif_type   = NotifType.TASK_ASSIGNED,
+            title        = f'Task assigned to you: "{task_title}"',
+            message      = (
+                f'{user_name} has assigned you the task "{task_title}". '
+                f'Priority: {task_priority_val}. Check your tasks to get started.'
+            ),
+            task_id = task_id,
+            team_id = task.team_id,
+        )
+
+    return task
+
+
+# ── PATCH /bulk-update ────────────────────────────────────────────────────────
 @task_patch.patch("/bulk-update", response_model=List[TaskRead])
 async def bulk_update_tasks(
     updates: List[UpdateTask],
-    user: UserDB = Depends(RoleChecker(["admin", "manager"])),
-    db: AsyncSession = Depends(async_get_db),
+    user   : UserDB       = Depends(RoleChecker(["admin", "manager"])),
+    db     : AsyncSession = Depends(async_get_db),
 ):
     if not updates:
         raise HTTPException(status_code=400, detail="Update list cannot be empty")
- 
+
+    # ── Read user fields before any commit ───────────────────────────────────
+    user_id   = user.id
+    user_name = user.name
+    user_role = user.role
+
     task_ids = [u.task_id for u in updates]
-    query = select(TaskDB).where(TaskDB.id.in_(task_ids))
-    result = await db.execute(query)
-    existing_tasks = {t.id: t for t in result.scalars().all()}
- 
-    if len(existing_tasks) != len(task_ids):
+    result   = await db.execute(select(TaskDB).where(TaskDB.id.in_(task_ids)))
+    existing = {t.id: t for t in result.scalars().all()}
+
+    if len(existing) != len(task_ids):
         raise HTTPException(status_code=404, detail="Kuch task IDs database mein nahi mile")
- 
+
+    # ── Track reassignments BEFORE applying changes ───────────────────────────
+    # We need old assign_id per task to detect actual reassignments
+    reassignments = []   # list of (new_assign_id, task_id, task_title, team_id, priority)
+
     updated_objects = []
     for update_data in updates:
-        target_task = existing_tasks.get(update_data.task_id)
- 
-        if user.role == "manager" and target_task.created_by_id != user.id:
+        task = existing.get(update_data.task_id)
+
+        if user_role == "manager" and task.created_by_id != user_id:
             raise HTTPException(
                 status_code=403,
-                detail=f"Task {target_task.id} aapki nahi hai, update nahi kar sakte"
+                detail=f"Task {task.id} aapki nahi hai, update nahi kar sakte",
             )
- 
+
+        old_assignee = task.assign_id
+
+        # Validate new assignee if being reassigned
         update_dict = update_data.model_dump(exclude_unset=True, exclude={"task_id"})
+        new_assign_id = update_dict.get("assign_id")
+
+        if new_assign_id and str(new_assign_id) != str(old_assignee or ""):
+            new_assignee = (await db.execute(
+                select(UserDB).where(
+                    UserDB.id == new_assign_id,
+                    UserDB.is_active == True,
+                )
+            )).scalars().first()
+            if not new_assignee:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Assignee not found for task {task.id}",
+                )
+            # Snapshot everything needed for notification (before commit expires objects)
+            reassignments.append({
+                "recipient_id": new_assign_id,
+                "task_id"     : task.id,
+                "task_title"  : update_dict.get("title") or task.title,
+                "team_id"     : update_dict.get("team_id") or task.team_id,
+                "priority"    : (update_dict.get("priority") or task.priority).value
+                                if hasattr((update_dict.get("priority") or task.priority), "value")
+                                else str(update_dict.get("priority") or task.priority),
+            })
+
+        # Apply all field updates
         for key, value in update_dict.items():
-            setattr(target_task, key, value)
- 
-        updated_objects.append(target_task)
- 
+            setattr(task, key, value)
+
+        updated_objects.append(task)
+
     try:
         await db.commit()
         for t in updated_objects:
             await db.refresh(t)
-        return updated_objects
     except Exception:
         await db.rollback()
         raise HTTPException(status_code=500, detail="Bulk update failed")
+
+    # ── Send reassignment notifications (after commit, using plain vars only) ─
+    for r in reassignments:
+        await create_notification(
+            db           = db,
+            recipient_id = r["recipient_id"],
+            sender_id    = user_id,
+            notif_type   = NotifType.TASK_ASSIGNED,
+            title        = f'Task assigned to you: "{r["task_title"]}"',
+            message      = (
+                f'{user_name} has assigned you the task "{r["task_title"]}". '
+                f'Priority: {r["priority"]}. Check your tasks to get started.'
+            ),
+            task_id = r["task_id"],
+            team_id = r["team_id"],
+        )
+
+    return updated_objects

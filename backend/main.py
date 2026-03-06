@@ -6,7 +6,6 @@ from Exception.exception import (
     response_validation_exception_handler,
 )
 
-# from Routes.AdminCreate import admin_router
 from Routes.User.PostAPI import create_router
 from Routes.User.GetAPI import userRouter
 from Routes.Task.PostAPI import task_post
@@ -22,14 +21,13 @@ from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from Routes.AuthLogic.router import router
 from fastapi.middleware.cors import CORSMiddleware
 from Routes.Task.GetAPI import task_get
+from Routes.MyTask.GetAPI import my_task_router          # ← NEW
 from Routes.Notification.notify_route import notif_router
+from Routes.Analytics.GetAPI import analytics_router, reports_router  # ← NEW
 
 app = FastAPI()
 app.add_exception_handler(IntegrityError, integrity_exception_handler)
-# app.add_exception_handler(ResponseValidationError, request_validation_exception_handler)
-# app.add_exception_handler(
-#     ResponseValidationError, response_validation_exception_handler
-# )
+
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -44,7 +42,7 @@ app.add_middleware(
 )
 app.add_exception_handler(Exception, global_exception_handler)
 
-# 1. AUTH / LOGIN ROUTES (Always first)
+# 1. AUTH / LOGIN ROUTES
 app.include_router(router)
 
 # 2. TEAM ROUTES
@@ -53,19 +51,21 @@ app.include_router(team_post)
 app.include_router(team_patch)
 app.include_router(delete_teamrouter)
 
-# 3. TASK ROUTES — all task routes together, task_get last because it has
-# the dynamic route /tasks/{task_id}.
+# 3. TASK ROUTES
 app.include_router(task_post)
 app.include_router(task_patch)
 app.include_router(delete_taskrouter)
-app.include_router(task_get)   # contains /tasks and /tasks/{task_id}
+app.include_router(my_task_router)   # GET /my-tasks  ← NEW (before generic task_get)
+app.include_router(task_get)         # GET /tasks and /tasks/{task_id}
 
 # 4. NOTIFICATION ROUTES
 app.include_router(notif_router)
 
-# 5. USER ROUTES — userRouter's /{user_id} is a catch-all so it must be
-# registered LAST. All static routes (/tasks/stats, /all, /me, etc.)
-# are safe because task routes are already registered above.
+# 5. ANALYTICS & REPORTS  ← NEW
+app.include_router(analytics_router)
+app.include_router(reports_router)
+
+# 6. USER ROUTES — /{user_id} catch-all must remain last
 app.include_router(userUpdateRouter)
 app.include_router(create_router)
-app.include_router(userRouter)  # contains /{user_id} — always last
+app.include_router(userRouter)

@@ -5,19 +5,24 @@ import { useEffect } from 'react'
 import { selIsAuth, selUser, fetchMe } from './redux/slices/authSlice'
 import { THEME as T } from './config/theme.config'
 import PropTypes from 'prop-types'
-import Layout        from './components/layout/MainLayout'
-import DashboardPage from './pages/DashBoard'
-import AnalyticsPage from './pages/AnalyticsPage'
-import ReportsPage   from './pages/ReportPage'
-import LoginPage     from './pages/LoginPage'
-import VerifyOtpPage from './pages/Verifyotppage'
-import ProfilePage   from './pages/Profilepage'
-import TeamsPage     from './pages/Teamspage'
-import UsersPage     from './pages/Userspage'
-import TasksPage     from './pages/Taskspage'
-import MyTasksPage   from './pages/MyTaskPage'
-import AssignPage    from './pages/AssignPage'
+import Layout            from './components/layout/MainLayout'
+import DashboardPage     from './pages/DashBoard'
+import AnalyticsPage     from './pages/AnalyticsPage'
+import ReportsPage       from './pages/ReportPage'
+import LoginPage         from './pages/LoginPage'
+import VerifyOtpPage     from './pages/Verifyotppage'
+import ProfilePage       from './pages/Profilepage'
+import TeamsPage         from './pages/Teamspage'
+import UsersPage         from './pages/Userspage'
+import TasksPage         from './pages/Taskspage'
+import MyTasksPage       from './pages/MyTaskPage'
+import AssignPage        from './pages/AssignPage'
 import NotificationsPage from './pages/NotificationPage'
+
+// ── New dedicated form pages (replacing dialogs) ──────────────────────────────
+import AddTaskPage from './pages/AddTaskPage'
+import AddTeamPage from './pages/AddTeamPage'
+import AddUserPage from './pages/AddUserPage'
 
 function Protected({ children, roles }) {
   const isAuth = useSelector(selIsAuth)
@@ -45,20 +50,32 @@ function AuthSync() {
 function AppRoutes() {
   return (
     <Routes>
+      {/* ── Public ─────────────────────────────────────────────────────────── */}
       <Route path="/login"        element={<Public><LoginPage /></Public>} />
       <Route path="/verify-email" element={<VerifyOtpPage />} />
 
-      <Route path="/dashboard" element={<Protected><Layout><DashboardPage /></Layout></Protected>} />
-      <Route path="/analytics" element={<Protected><Layout><AnalyticsPage /></Layout></Protected>} />
-      <Route path="/report"    element={<Protected><Layout><ReportsPage /></Layout></Protected>} />
-      <Route path="/profile"   element={<Protected><Layout><ProfilePage /></Layout></Protected>} />
-      <Route path="/teams"     element={<Protected><Layout><TeamsPage /></Layout></Protected>} />
-      <Route path="/tasks"     element={<Protected roles={['admin','manager']}><Layout><TasksPage /></Layout></Protected>} />
-      <Route path="/my-tasks"  element={<Protected><Layout><MyTasksPage /></Layout></Protected>} />
-      <Route path="/assign"    element={<Protected roles={['admin','manager']}><Layout><AssignPage /></Layout></Protected>} />
-      <Route path="/users"     element={<Protected roles={['admin','manager']}><Layout><UsersPage /></Layout></Protected>} />
+      {/* ── Main app (inside Layout) ────────────────────────────────────────── */}
+      <Route path="/dashboard"  element={<Protected><Layout><DashboardPage /></Layout></Protected>} />
+      <Route path="/analytics"  element={<Protected><Layout><AnalyticsPage /></Layout></Protected>} />
+      <Route path="/report"     element={<Protected><Layout><ReportsPage /></Layout></Protected>} />
+      <Route path="/profile"    element={<Protected><Layout><ProfilePage /></Layout></Protected>} />
+      <Route path="/my-tasks"   element={<Protected><Layout><MyTasksPage /></Layout></Protected>} />
       <Route path="/notifications" element={<Protected><Layout><NotificationsPage /></Layout></Protected>} />
 
+      {/* ── Teams ──────────────────────────────────────────────────────────── */}
+      <Route path="/teams"      element={<Protected><Layout><TeamsPage /></Layout></Protected>} />
+      <Route path="/teams/new"  element={<Protected roles={['admin','manager']}><Layout><AddTeamPage /></Layout></Protected>} />
+
+      {/* ── Tasks ──────────────────────────────────────────────────────────── */}
+      <Route path="/tasks"      element={<Protected roles={['admin','manager']}><Layout><TasksPage /></Layout></Protected>} />
+      <Route path="/tasks/new"  element={<Protected roles={['admin','manager']}><Layout><AddTaskPage /></Layout></Protected>} />
+      <Route path="/assign"     element={<Protected roles={['admin','manager']}><Layout><AssignPage /></Layout></Protected>} />
+
+      {/* ── Users ──────────────────────────────────────────────────────────── */}
+      <Route path="/users"      element={<Protected roles={['admin','manager']}><Layout><UsersPage /></Layout></Protected>} />
+      <Route path="/users/new"  element={<Protected roles={['admin','manager']}><Layout><AddUserPage /></Layout></Protected>} />
+
+      {/* ── Fallback ───────────────────────────────────────────────────────── */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )

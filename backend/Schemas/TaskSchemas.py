@@ -29,6 +29,7 @@ class TaskUpdateAssign(BaseModel):
 
 class TaskUpdate(BaseModel):
     task_id:UUID
+    team_id:Optional[UUID]=None
     title: Optional[str] = None
     description: Optional[str] = None
     priority: Optional[PriorityBased] = None

@@ -1,133 +1,91 @@
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { api } from '../redux/slices/authSlice'
 import { THEME as T } from '../config/theme.config'
-import {
-  AreaChart, Area, BarChart, Bar, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  PieChart, Pie, Cell, ResponsiveContainer,
-} from 'recharts'
-
-/* ─── Static chart data ───────────────────────── */
-const tasksTrend = [
-  { month: 'Sep', completed: 48, created: 65, overdue: 8 },
-  { month: 'Oct', completed: 72, created: 80, overdue: 5 },
-  { month: 'Nov', completed: 61, created: 74, overdue: 12 },
-  { month: 'Dec', completed: 55, created: 60, overdue: 4 },
-  { month: 'Jan', completed: 89, created: 95, overdue: 7 },
-  { month: 'Feb', completed: 97, created: 104, overdue: 6 },
-]
-
-const teamVelocity = [
-  { sprint: 'S-14', points: 42 }, { sprint: 'S-15', points: 58 },
-  { sprint: 'S-16', points: 51 }, { sprint: 'S-17', points: 73 },
-  { sprint: 'S-18', points: 65 }, { sprint: 'S-19', points: 80 },
-  { sprint: 'S-20', points: 88 },
-]
-
-const projectDist = [
-  { name: 'Website Redesign', value: 34, color: T.colors.primary.DEFAULT },
-  { name: 'Mobile App v2',    value: 22, color: T.colors.teal.DEFAULT },
-  { name: 'API Integration',  value: 18, color: '#fb923c' },
-  { name: 'Design System',    value: 14, color: '#a855f7' },
-  { name: 'Others',           value: 12, color: '#475569' },
-]
-
-const memberOutput = [
-  { name: 'Raj J.',   tasks: 38, reviews: 12, comments: 24 },
-  { name: 'Sneha K.', tasks: 45, reviews: 18, comments: 31 },
-  { name: 'Arjun M.', tasks: 29, reviews: 8,  comments: 16 },
-  { name: 'Priya K.', tasks: 52, reviews: 22, comments: 40 },
-  { name: 'Mohan K.', tasks: 33, reviews: 14, comments: 19 },
-]
+import toast from 'react-hot-toast'
 
 const CSS = `
-  .an-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-  .an-grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
-  .an-card {
-    background: ${T.colors.bg.card}; border: 1px solid ${T.colors.bg.border};
-    border-radius: ${T.radius.lg}; padding: 20px;
-  }
-  .an-card-title {
-    font-family: ${T.fonts.display}; font-weight: 700; font-size: 15px;
-    color: ${T.colors.text.primary}; margin-bottom: 4px;
-  }
-  .an-card-sub {
-    font-size: 12px; color: ${T.colors.text.muted}; margin-bottom: 18px;
-    font-family: ${T.fonts.mono};
-  }
-  .an-stat-val {
-    font-family: ${T.fonts.display}; font-weight: 800; font-size: 32px;
-    color: ${T.colors.text.primary}; line-height: 1;
-  }
-  .an-stat-label { font-size: 12px; color: ${T.colors.text.secondary}; margin-top: 4px; }
-  .an-stat-change { font-family: ${T.fonts.mono}; font-size: 11px; font-weight: 600;
-                    border-radius: 20px; padding: 2px 8px; }
-  @media (max-width: 1024px) {
-    .an-grid2 { grid-template-columns: 1fr; }
-    .an-grid3 { grid-template-columns: 1fr 1fr; }
-  }
-  @media (max-width: 640px) {
-    .an-grid3 { grid-template-columns: 1fr; }
-    .an-grid2 { gap: 12px; }
-    .an-card  { padding: 14px; }
-  }
+  .an-grid   { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .an-card   { background: ${T.colors.bg.card}; border: 1px solid ${T.colors.bg.border}; border-radius: ${T.radius.lg}; padding: 20px 22px; }
+  .an-skel   { background: linear-gradient(90deg, ${T.colors.bg.elevated} 25%, ${T.colors.bg.hover} 50%, ${T.colors.bg.elevated} 75%); background-size: 200% 100%; animation: an-shimmer 1.5s infinite; border-radius: ${T.radius.md}; }
+  .an-table  { width: 100%; border-collapse: collapse; }
+  .an-th     { font-family: ${T.fonts.mono}; font-size: 10px; font-weight: 600; color: ${T.colors.text.muted}; text-transform: uppercase; letter-spacing: 0.08em; padding: 10px 14px; text-align: left; border-bottom: 1px solid ${T.colors.bg.border}; white-space: nowrap; }
+  .an-td     { padding: 12px 14px; border-bottom: 1px solid ${T.colors.bg.border}; font-size: 13px; color: ${T.colors.text.secondary}; }
+  .an-tr:hover .an-td { background: ${T.colors.bg.hover}; }
+  .an-bar-bg { background: ${T.colors.bg.elevated}; border-radius: 4px; height: 7px; overflow: hidden; flex: 1; }
+  .an-badge  { display: inline-flex; align-items: center; font-family: ${T.fonts.mono}; font-size: 10px; font-weight: 600; border-radius: ${T.radius.full}; padding: 3px 9px; }
+  @keyframes an-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  @media (max-width: 700px) { .an-mid-row { grid-template-columns: 1fr !important; } }
 `
 
-/* ─── Custom tooltip ──────────────────────────── */
-function CustomTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null
+function Skel({ h = 20, w = '100%' }) {
+  return <div className="an-skel" style={{ height: h, width: w }} />
+}
+
+function Bar({ value, max, color }) {
+  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
   return (
-    <div style={{
-      background: T.colors.bg.elevated, border: `1px solid ${T.colors.bg.border}`,
-      borderRadius: T.radius.md, padding: '10px 14px', boxShadow: T.shadows.md,
-    }}>
-      <p style={{ fontFamily: T.fonts.mono, fontSize: 11, color: T.colors.text.muted, marginBottom: 6 }}>{label}</p>
-      {payload.map((p, i) => (
-        <p key={i} style={{ fontFamily: T.fonts.body, fontSize: 12, color: p.color, marginBottom: 2 }}>
-          {p.name}: <strong>{p.value}</strong>
-        </p>
-      ))}
+    <div className="an-bar-bg">
+      <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 4, transition: 'width 0.7s ease' }} />
     </div>
   )
 }
 
-function Card({ title, sub, children }) {
+function StatCard({ icon, label, value, sub, color, loading }) {
   return (
     <div className="an-card">
-      <p className="an-card-title">{title}</p>
-      {sub && <p className="an-card-sub">{sub}</p>}
-      {children}
-    </div>
-  )
-}
-
-function StatCard({ value, label, change, up }) {
-  return (
-    <div className="an-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <p className="an-stat-val">{value}</p>
-          <p className="an-stat-label">{label}</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <div style={{ width: 40, height: 40, borderRadius: T.radius.md, background: `${color}1a`, border: `1px solid ${color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+          {icon}
         </div>
-        <span className="an-stat-change" style={{
-          background: up ? T.colors.success.bg : T.colors.danger.bg,
-          color: up ? T.colors.success.text : T.colors.danger.text,
-        }}>
-          {up ? '↑' : '↓'} {change}
-        </span>
+        <div style={{ flex: 1 }}>
+          <p style={{ fontFamily: T.fonts.mono, fontSize: 10, fontWeight: 600, color: T.colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.07em', margin: 0 }}>{label}</p>
+          {loading ? <Skel h={28} w="60%" /> : <p style={{ fontFamily: T.fonts.display, fontWeight: 800, fontSize: 26, color: T.colors.text.primary, margin: '2px 0 0', letterSpacing: '-0.02em' }}>{value ?? '—'}</p>}
+        </div>
       </div>
+      {sub && !loading && <p style={{ fontSize: 12, color: T.colors.text.muted, margin: 0 }}>{sub}</p>}
     </div>
   )
 }
 
 export default function AnalyticsPage() {
-  const gridProps = {
-    strokeDasharray: '3 3',
-    stroke: T.colors.bg.border,
-    vertical: false,
-  }
-  const axisStyle = {
-    tick: { fill: T.colors.text.muted, fontSize: 11, fontFamily: T.fonts.mono },
-    axisLine: false, tickLine: false,
-  }
+  const navigate = useNavigate()
+  const [overview,  setOverview]  = useState(null)
+  const [breakdown, setBreakdown] = useState(null)
+  const [teamPerf,  setTeamPerf]  = useState(null)
+  const [workload,  setWorkload]  = useState(null)
+  const [loading,   setLoading]   = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      try {
+        const [ov, bd, tp, wl] = await Promise.allSettled([
+          api.get('/analytics/overview'),
+          api.get('/analytics/task-breakdown'),
+          api.get('/analytics/team-performance'),
+          api.get('/analytics/user-workload'),
+        ])
+        if (ov.status === 'fulfilled') setOverview(ov.value.data)
+        if (bd.status === 'fulfilled') setBreakdown(bd.value.data)
+        if (tp.status === 'fulfilled') setTeamPerf(tp.value.data)
+        if (wl.status === 'fulfilled') setWorkload(wl.value.data)
+      } catch (e) {
+        toast.error('Failed to load analytics')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  const STATUS_COLOR  = { todo: T.colors.info.text,    doing: T.colors.warning.text, complete: T.colors.success.text }
+  const STATUS_BG     = { todo: T.colors.info.bg,      doing: T.colors.warning.bg,   complete: T.colors.success.bg }
+  const PRIORITY_COLOR = { low: T.colors.success.text, medium: T.colors.warning.text, high: T.colors.danger.text }
+  const PRIORITY_BG    = { low: T.colors.success.bg,   medium: T.colors.warning.bg,   high: T.colors.danger.bg }
+
+  const maxPriority = breakdown ? Math.max(...breakdown.by_priority.map(p => p.count), 1) : 1
+  const maxStatus   = breakdown ? Math.max(...breakdown.by_status.map(s => s.count), 1) : 1
 
   return (
     <>
@@ -135,115 +93,161 @@ export default function AnalyticsPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, fontFamily: T.fonts.body }}>
 
         {/* Header */}
-        <div className="anim-fade-up">
-          <h1 style={{ fontFamily: T.fonts.display, fontWeight: 800, fontSize: 24, color: T.colors.text.primary, letterSpacing: '-0.02em', marginBottom: 6 }}>
-            Analytics
-          </h1>
-          <p style={{ fontSize: 14, color: T.colors.text.secondary }}>
-            Team performance insights — last 6 months
-          </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <h1 style={{ fontFamily: T.fonts.display, fontWeight: 800, fontSize: 24, color: T.colors.text.primary, letterSpacing: '-0.02em', marginBottom: 4 }}>Analytics</h1>
+            <p style={{ fontSize: 14, color: T.colors.text.secondary }}>Live overview of your workspace</p>
+          </div>
+          <button
+            onClick={() => navigate('/report')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: T.radius.md, border: `1px solid ${T.colors.primary.DEFAULT}40`, background: `${T.colors.primary.DEFAULT}12`, color: T.colors.primary.light, fontFamily: T.fonts.body, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            📄 View Reports →
+          </button>
         </div>
 
-        {/* KPI Stats */}
-        <div className="an-grid3 anim-fade-up delay-1">
-          <StatCard value="97"  label="Tasks Completed (Feb)" change="18%"   up />
-          <StatCard value="88"  label="Sprint Velocity (pts)" change="11pts" up />
-          <StatCard value="4.2" label="Avg. Days to Close"    change="0.8d"  up={false} />
-          <StatCard value="284" label="Total Active Tasks"    change="12%"   up />
-          <StatCard value="14"  label="Team Members"          change="2"     up />
-          <StatCard value="6"   label="Overdue Tasks"         change="3"     up={false} />
+        {/* Overview stat cards */}
+        <div className="an-grid">
+          <StatCard icon="📋" label="Total Tasks"  value={overview?.total_tasks}   sub={`${overview?.complete_tasks ?? 0} completed`}  color={T.colors.primary.DEFAULT} loading={loading} />
+          <StatCard icon="✅" label="Completed"    value={overview?.complete_tasks} sub={overview?.total_tasks ? `${Math.round((overview.complete_tasks / overview.total_tasks) * 100)}% completion rate` : undefined} color={T.colors.success.text} loading={loading} />
+          <StatCard icon="⚡" label="In Progress"  value={overview?.doing_tasks}    color={T.colors.warning.text} loading={loading} />
+          <StatCard icon="🔲" label="To Do"        value={overview?.todo_tasks}     color={T.colors.info.text}    loading={loading} />
+          <StatCard icon="👥" label="Total Users"  value={overview?.total_users}    color={T.colors.teal?.DEFAULT || '#2dd4bf'} loading={loading} />
+          <StatCard icon="🏢" label="Total Teams"  value={overview?.total_teams}    color="#f59e0b" loading={loading} />
         </div>
 
-        {/* Tasks trend — full width */}
-        <div className="anim-fade-up delay-2">
-          <Card title="Task Activity Trend" sub="Completed vs Created vs Overdue">
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={tasksTrend} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gCompleted" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={T.colors.primary.DEFAULT} stopOpacity={0.35}/>
-                    <stop offset="95%" stopColor={T.colors.primary.DEFAULT} stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="gCreated" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={T.colors.teal.DEFAULT} stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor={T.colors.teal.DEFAULT} stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid {...gridProps} />
-                <XAxis dataKey="month" {...axisStyle} />
-                <YAxis {...axisStyle} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontFamily: T.fonts.body, fontSize: 12, color: T.colors.text.secondary }} />
-                <Area type="monotone" dataKey="completed" name="Completed" stroke={T.colors.primary.DEFAULT} fill="url(#gCompleted)" strokeWidth={2} dot={false} />
-                <Area type="monotone" dataKey="created"   name="Created"   stroke={T.colors.teal.DEFAULT}    fill="url(#gCreated)"    strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="overdue"   name="Overdue"   stroke={T.colors.danger.text}     strokeWidth={2} strokeDasharray="4 4" dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </Card>
-        </div>
+        {/* Mid row: status + priority breakdown */}
+        <div className="an-mid-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
-        {/* 2-col row */}
-        <div className="an-grid2 anim-fade-up delay-3">
-          {/* Sprint velocity */}
-          <Card title="Sprint Velocity" sub="Story points delivered per sprint">
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={teamVelocity} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <CartesianGrid {...gridProps} />
-                <XAxis dataKey="sprint" {...axisStyle} />
-                <YAxis {...axisStyle} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="points" name="Points" fill={T.colors.primary.DEFAULT} radius={[4,4,0,0]}>
-                  {teamVelocity.map((_, i) => (
-                    <Cell key={i} fill={i === teamVelocity.length - 1 ? T.colors.teal.DEFAULT : T.colors.primary.DEFAULT} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
-
-          {/* Project distribution */}
-          <Card title="Task Distribution" sub="By project — current quarter">
-            <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-              <ResponsiveContainer width="50%" height={180} style={{ minWidth: 140 }}>
-                <PieChart>
-                  <Pie data={projectDist} cx="50%" cy="50%" innerRadius={48} outerRadius={72}
-                    dataKey="value" paddingAngle={3}>
-                    {projectDist.map((d, i) => <Cell key={i} fill={d.color} />)}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div style={{ flex: 1, minWidth: 120, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {projectDist.map(d => (
-                  <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
-                    <span style={{ fontFamily: T.fonts.body, fontSize: 12, color: T.colors.text.secondary, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
-                    <span style={{ fontFamily: T.fonts.mono, fontSize: 11, color: T.colors.text.muted }}>{d.value}%</span>
+          {/* Status breakdown */}
+          <div className="an-card">
+            <p style={{ fontFamily: T.fonts.mono, fontSize: 10, fontWeight: 600, color: T.colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 16px' }}>Status Breakdown</p>
+            {loading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{[1,2,3].map(i => <Skel key={i} h={24} />)}</div>
+            ) : breakdown?.by_status?.length ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {breakdown.by_status.map(s => (
+                  <div key={s.status}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span className="an-badge" style={{ background: STATUS_BG[s.status] || T.colors.bg.elevated, color: STATUS_COLOR[s.status] || T.colors.text.secondary }}>{s.status}</span>
+                      <span style={{ fontFamily: T.fonts.mono, fontSize: 12, fontWeight: 700, color: T.colors.text.primary }}>{s.count}</span>
+                    </div>
+                    <Bar value={s.count} max={maxStatus} color={STATUS_COLOR[s.status] || T.colors.primary.DEFAULT} />
                   </div>
                 ))}
               </div>
+            ) : <p style={{ fontSize: 13, color: T.colors.text.muted, textAlign: 'center', padding: '20px 0' }}>No data</p>}
+          </div>
+
+          {/* Priority breakdown */}
+          <div className="an-card">
+            <p style={{ fontFamily: T.fonts.mono, fontSize: 10, fontWeight: 600, color: T.colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 16px' }}>Priority Breakdown</p>
+            {loading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{[1,2,3].map(i => <Skel key={i} h={24} />)}</div>
+            ) : breakdown?.by_priority?.length ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {breakdown.by_priority.map(p => (
+                  <div key={p.priority}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span className="an-badge" style={{ background: PRIORITY_BG[p.priority] || T.colors.bg.elevated, color: PRIORITY_COLOR[p.priority] || T.colors.text.secondary }}>{p.priority}</span>
+                      <span style={{ fontFamily: T.fonts.mono, fontSize: 12, fontWeight: 700, color: T.colors.text.primary }}>{p.count}</span>
+                    </div>
+                    <Bar value={p.count} max={maxPriority} color={PRIORITY_COLOR[p.priority] || T.colors.primary.DEFAULT} />
+                  </div>
+                ))}
+              </div>
+            ) : <p style={{ fontSize: 13, color: T.colors.text.muted, textAlign: 'center', padding: '20px 0' }}>No data</p>}
+          </div>
+        </div>
+
+        {/* Team Performance */}
+        <div className="an-card">
+          <p style={{ fontFamily: T.fonts.mono, fontSize: 10, fontWeight: 600, color: T.colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 16px' }}>Team Performance</p>
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{[1,2,3].map(i => <Skel key={i} h={20} />)}</div>
+          ) : teamPerf?.length ? (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="an-table">
+                <thead>
+                  <tr>
+                    {['Team', 'Total', 'Done', 'Doing', 'Todo', 'Completion'].map(h => <th key={h} className="an-th">{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamPerf.map(t => (
+                    <tr key={t.team_id} className="an-tr" style={{ cursor: 'pointer' }} onClick={() => navigate('/report')}>
+                      <td className="an-td">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: T.radius.sm, background: `${T.colors.primary.DEFAULT}1a`, border: `1px solid ${T.colors.primary.DEFAULT}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.fonts.display, fontWeight: 700, fontSize: 12, color: T.colors.primary.light, flexShrink: 0 }}>
+                            {t.team_name?.charAt(0).toUpperCase()}
+                          </div>
+                          <span style={{ fontWeight: 600, color: T.colors.text.primary }}>{t.team_name}</span>
+                        </div>
+                      </td>
+                      <td className="an-td" style={{ textAlign: 'center', fontWeight: 700, color: T.colors.text.primary }}>{t.total_tasks}</td>
+                      <td className="an-td" style={{ textAlign: 'center', color: T.colors.success.text, fontWeight: 700 }}>{t.complete_tasks}</td>
+                      <td className="an-td" style={{ textAlign: 'center', color: T.colors.warning.text, fontWeight: 700 }}>{t.doing_tasks}</td>
+                      <td className="an-td" style={{ textAlign: 'center', color: T.colors.info.text, fontWeight: 700 }}>{t.todo_tasks}</td>
+                      <td className="an-td">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 120 }}>
+                          <Bar
+                            value={t.completion_rate}
+                            max={100}
+                            color={t.completion_rate >= 70 ? T.colors.success.text : t.completion_rate >= 40 ? T.colors.warning.text : T.colors.danger.text}
+                          />
+                          <span style={{ fontFamily: T.fonts.mono, fontSize: 11, fontWeight: 700, color: T.colors.text.primary, minWidth: 36 }}>{t.completion_rate}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </Card>
+          ) : <p style={{ fontSize: 13, color: T.colors.text.muted, textAlign: 'center', padding: '24px 0' }}>No team data available</p>}
         </div>
 
-        {/* Member output bar chart */}
-        <div className="anim-fade-up">
-          <Card title="Team Member Output" sub="Tasks · Reviews · Comments — Feb 2026">
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={memberOutput} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <CartesianGrid {...gridProps} />
-                <XAxis dataKey="name" {...axisStyle} />
-                <YAxis {...axisStyle} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontFamily: T.fonts.body, fontSize: 12, color: T.colors.text.secondary }} />
-                <Bar dataKey="tasks"    name="Tasks"    fill={T.colors.primary.DEFAULT}    radius={[3,3,0,0]} />
-                <Bar dataKey="reviews"  name="Reviews"  fill={T.colors.teal.DEFAULT}        radius={[3,3,0,0]} />
-                <Bar dataKey="comments" name="Comments" fill={T.colors.accent.DEFAULT}      radius={[3,3,0,0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
-        </div>
-
+        {/* User Workload — only shown when data exists (admin/manager only) */}
+        {(loading || (workload && workload.length > 0)) && (
+          <div className="an-card">
+            <p style={{ fontFamily: T.fonts.mono, fontSize: 10, fontWeight: 600, color: T.colors.text.muted, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 16px' }}>User Workload</p>
+            {loading ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px,1fr))', gap: 10 }}>{[1,2,3,4].map(i => <Skel key={i} h={90} />)}</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px,1fr))', gap: 12 }}>
+                {workload.map(u => {
+                  const pct = u.total_tasks > 0 ? Math.round((u.complete_tasks / u.total_tasks) * 100) : 0
+                  const initials = (u.user_name || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                  return (
+                    <div key={u.user_id} style={{ background: T.colors.bg.elevated, border: `1px solid ${T.colors.bg.border}`, borderRadius: T.radius.md, padding: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                        <div style={{ width: 34, height: 34, borderRadius: '50%', background: T.gradients.brand, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.fonts.display, fontWeight: 700, fontSize: 12, color: '#fff', flexShrink: 0 }}>{initials}</div>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontFamily: T.fonts.display, fontWeight: 700, fontSize: 13, color: T.colors.text.primary, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.user_name}</p>
+                          <p style={{ fontFamily: T.fonts.mono, fontSize: 10, color: T.colors.text.muted, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.user_email}</p>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                        {[
+                          { label: 'Total', val: u.total_tasks, color: T.colors.text.primary },
+                          { label: 'Done',  val: u.complete_tasks, color: T.colors.success.text },
+                          { label: 'Active', val: u.doing_tasks, color: T.colors.warning.text },
+                        ].map(s => (
+                          <div key={s.label} style={{ flex: 1, textAlign: 'center', background: T.colors.bg.card, borderRadius: T.radius.sm, padding: '7px 4px' }}>
+                            <p style={{ fontFamily: T.fonts.display, fontWeight: 800, fontSize: 15, color: s.color, margin: 0 }}>{s.val}</p>
+                            <p style={{ fontFamily: T.fonts.mono, fontSize: 9, color: T.colors.text.muted, margin: 0 }}>{s.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Bar value={pct} max={100} color={pct >= 70 ? T.colors.success.text : pct >= 40 ? T.colors.warning.text : T.colors.primary.DEFAULT} />
+                        <span style={{ fontFamily: T.fonts.mono, fontSize: 10, color: T.colors.text.muted, minWidth: 30 }}>{pct}%</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </>
   )
