@@ -3,9 +3,9 @@ import axios from 'axios'
 import toast from 'react-hot-toast'
 
 export const api = axios.create({
-  baseURL: 'http://localhost:8000',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
   headers: { 'Content-Type': 'application/json' },
-})
+});
 
 // Store reference injected from main.jsx after store is created
 // Avoids circular imports AND the PersistGate rehydration timing problem
