@@ -23,7 +23,7 @@ import NotificationsPage from "./pages/NotificationPage";
 import AddTaskPage from "./pages/AddTaskPage";
 import AddTeamPage from "./pages/AddTeamPage";
 import AddUserPage from "./pages/AddUserPage";
-import EditTaskPage from "./pages/EditTaskpage";
+import EditTaskPage from "./pages/Edittaskpage";
 
 function Protected({ children, roles }) {
   const isAuth = useSelector(selIsAuth);
