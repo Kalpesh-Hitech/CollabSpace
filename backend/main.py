@@ -32,6 +32,7 @@ app.add_exception_handler(IntegrityError, integrity_exception_handler)
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://collab-space-steel.vercel.app"
 ]
 
 app.add_middleware(
