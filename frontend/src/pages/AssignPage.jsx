@@ -14,7 +14,7 @@ const CSS = `
   .as-input::placeholder { color: ${T.colors.text.muted}; }
   .as-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 20px; border-radius: ${T.radius.md}; border: none; font-family: ${T.fonts.body}; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
   .as-btn:active { transform: scale(0.97); }
-  .as-tab { padding: 8px 18px; border-radius: ${T.radius.md}; border: none; font-family: ${T.fonts.body}; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .as-tab { padding: 8px 14px; border-radius: ${T.radius.md}; border: none; font-family: ${T.fonts.body}; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
   .as-row { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid ${T.colors.bg.border}; transition: background 0.15s; }
   .as-row:last-child { border-bottom: none; }
   .as-row:hover { background: ${T.colors.bg.elevated}; }
@@ -22,7 +22,14 @@ const CSS = `
   .as-label { display: block; font-size: 11px; font-weight: 600; color: ${T.colors.text.muted}; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.07em; }
   .as-field { margin-bottom: 18px; }
   .as-section { background: ${T.colors.bg.elevated}; border: 1px solid ${T.colors.bg.border}; border-radius: ${T.radius.lg}; padding: 22px; }
+  .as-tabs-bar { display: flex; gap: 6px; background: ${T.colors.bg.card}; border: 1px solid ${T.colors.bg.border}; border-radius: ${T.radius.lg}; padding: 6px; }
   @keyframes as-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  @media (max-width: 640px) {
+    .as-tabs-bar { flex-direction: column; gap: 4px; }
+    .as-tab { width: 100%; text-align: left; padding: 10px 14px; }
+    .as-row { padding: 10px 12px; gap: 8px; }
+    .as-section { padding: 16px 14px; }
+  }
 `
 
 const S = {
@@ -63,8 +70,10 @@ function AssignTaskTab({ tasks, teams, employees, onRefresh }) {
   const [userId, setUserId] = useState('')
   const [busy,   setBusy]   = useState(false)
 
-  const unassigned    = tasks.filter(t => !t.team_id && !t.assign_id)
-  const selectedTask  = tasks.find(t => t.id === taskId)
+  // Show ALL non-deleted tasks that don't have both team AND assignee yet
+  // Admin/manager may want to re-assign too, but primarily unassigned ones
+  const unassigned   = tasks.filter(t => !t.assign_id)
+  const selectedTask = tasks.find(t => t.id === taskId)
 
   const handleAssign = async () => {
     if (!taskId || !teamId || !userId) { toast.error('Select a task, team, and employee'); return }
@@ -75,14 +84,20 @@ function AssignTaskTab({ tasks, teams, employees, onRefresh }) {
       setTaskId(''); setTeamId(''); setUserId('')
       onRefresh()
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Assignment failed')
+      const msg = e.response?.data?.detail || 'Assignment failed'
+      // Helpful error message for the manager-owns-team restriction
+      if (msg.includes('own team') || msg.includes('your own')) {
+        toast.error('You can only assign tasks to teams you manage. Select one of your own teams.')
+      } else {
+        toast.error(msg)
+      }
     } finally { setBusy(false) }
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div className="as-section">
-        <SectionHeader icon="🎯" title="Assign Task to Team & Employee" desc="Select an unassigned task, choose a team, then pick the employee to assign it to." />
+        <SectionHeader icon="🎯" title="Assign Task to Team & Employee" desc="Select an unassigned task, choose a team you manage, then pick the employee." />
 
         <div className="as-field">
           <label className="as-label">1. Select Unassigned Task</label>
@@ -98,18 +113,21 @@ function AssignTaskTab({ tasks, teams, employees, onRefresh }) {
         </div>
 
         {selectedTask && (
-          <div style={{ background: T.colors.bg.card, border: `1px solid ${T.colors.bg.border}`, borderRadius: T.radius.md, padding: '10px 14px', marginBottom: 18, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ background: T.colors.bg.card, border: `1px solid ${T.colors.bg.border}`, borderRadius: T.radius.md, padding: '10px 14px', marginBottom: 18, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, color: T.colors.text.primary, fontWeight: 600, flex: 1 }}>{selectedTask.title}</span>
             <span className="as-badge" style={{ background: (P[selectedTask.priority] || P.medium).bg, color: (P[selectedTask.priority] || P.medium).color }}>{(P[selectedTask.priority] || P.medium).label}</span>
           </div>
         )}
 
         <div className="as-field">
-          <label className="as-label">2. Select Team</label>
+          <label className="as-label">2. Select Team <span style={{ fontSize: 10, color: T.colors.text.muted, fontWeight: 400, textTransform: 'none' }}>(must be a team you manage)</span></label>
           <select className="as-input" style={{ appearance: 'none', cursor: 'pointer' }} value={teamId} onChange={e => setTeamId(e.target.value)}>
             <option value="">— Pick a team —</option>
             {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
+          {teams.length === 0 && (
+            <p style={{ fontSize: 11, color: T.colors.text.muted, marginTop: 6 }}>No teams available.</p>
+          )}
         </div>
 
         <div className="as-field">
@@ -131,9 +149,9 @@ function AssignTaskTab({ tasks, teams, employees, onRefresh }) {
 
       {/* All tasks overview */}
       <div className="as-card">
-        <div style={{ padding: '14px 18px', borderBottom: `1px solid ${T.colors.bg.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ padding: '14px 18px', borderBottom: `1px solid ${T.colors.bg.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <p style={{ fontFamily: T.fonts.display, fontWeight: 700, fontSize: 14, color: T.colors.text.primary, margin: 0 }}>All Tasks Overview</p>
-          <span style={{ fontFamily: T.fonts.mono, fontSize: 11, color: T.colors.text.muted }}>{tasks.length} total</span>
+          <span style={{ fontFamily: T.fonts.mono, fontSize: 11, color: T.colors.text.muted }}>{tasks.length} total · {unassigned.length} unassigned</span>
         </div>
         {tasks.length === 0
           ? <p style={{ textAlign: 'center', padding: '32px 0', color: T.colors.text.muted, fontSize: 13 }}>No tasks yet</p>
@@ -143,7 +161,7 @@ function AssignTaskTab({ tasks, teams, employees, onRefresh }) {
               return (
                 <div key={task.id} className="as-row">
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: T.colors.text.primary, marginBottom: 3 }}>{task.title}</p>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: T.colors.text.primary, marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.title}</p>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <span className="as-badge" style={{ background: sc.bg, color: sc.color }}>{sc.label}</span>
                       <span className="as-badge" style={{ background: pc.bg, color: pc.color }}>{pc.label}</span>
@@ -175,12 +193,18 @@ function AssignTeamTab({ teams, employees, onRefresh }) {
     if (!teamId || !userId) { toast.error('Select both a team and an employee'); return }
     setBusy(true)
     try {
+      // Use the Teams PostAPI endpoint which supports both admin and manager
       await api.post('/assignee_teams', { team_id: teamId, user_id: userId })
       toast.success('Employee added to team! 🎉')
       setTeamId(''); setUserId('')
       onRefresh()
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Assignment failed')
+      const msg = e.response?.data?.detail || 'Assignment failed'
+      if (msg.includes('pehle se') || msg.includes('already')) {
+        toast.error('This employee is already a member of that team.')
+      } else {
+        toast.error(msg)
+      }
     } finally { setBusy(false) }
   }
 
@@ -203,6 +227,9 @@ function AssignTeamTab({ teams, employees, onRefresh }) {
             <option value="">— Pick an employee —</option>
             {employees.map(u => <option key={u.id} value={u.id}>{u.name}  ·  {u.email}</option>)}
           </select>
+          {employees.length === 0 && (
+            <p style={{ fontSize: 11, color: T.colors.text.muted, marginTop: 6 }}>No employees found.</p>
+          )}
         </div>
 
         <button className="as-btn" onClick={handleAssign} disabled={busy || !teamId || !userId}
@@ -225,12 +252,12 @@ function AssignTeamTab({ teams, employees, onRefresh }) {
                   <div style={{ width: 32, height: 32, borderRadius: T.radius.sm, background: `${dot}20`, border: `1px solid ${dot}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <span style={{ fontFamily: T.fonts.display, fontWeight: 700, fontSize: 13, color: dot }}>{team.name?.charAt(0).toUpperCase()}</span>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: T.colors.text.primary, marginBottom: 2 }}>{team.name}</p>
-                    <p style={{ fontSize: 11, color: T.colors.text.muted }}>ID: {team.id?.slice(0, 8)}…</p>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: T.colors.text.primary, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{team.name}</p>
+                    <p style={{ fontSize: 11, color: T.colors.text.muted, margin: 0 }}>ID: {team.id?.slice(0, 8)}…</p>
                   </div>
                   <button onClick={() => setTeamId(team.id)}
-                    style={{ padding: '5px 12px', borderRadius: T.radius.sm, border: `1px solid ${teamId === team.id ? T.colors.primary.DEFAULT : T.colors.bg.border}`, background: teamId === team.id ? `${T.colors.primary.DEFAULT}20` : 'transparent', color: teamId === team.id ? T.colors.primary.DEFAULT : T.colors.text.muted, fontFamily: T.fonts.mono, fontSize: 11, cursor: 'pointer' }}>
+                    style={{ padding: '5px 12px', borderRadius: T.radius.sm, border: `1px solid ${teamId === team.id ? T.colors.primary.DEFAULT : T.colors.bg.border}`, background: teamId === team.id ? `${T.colors.primary.DEFAULT}20` : 'transparent', color: teamId === team.id ? T.colors.primary.DEFAULT : T.colors.text.muted, fontFamily: T.fonts.mono, fontSize: 11, cursor: 'pointer', flexShrink: 0 }}>
                     {teamId === team.id ? '✓ Selected' : 'Select'}
                   </button>
                 </div>
@@ -315,11 +342,11 @@ function ReassignTab({ tasks, employees, onRefresh }) {
 }
 
 export default function AssignPage() {
-  const [tab,     setTab]     = useState('task')
-  const [tasks,   setTasks]   = useState([])
-  const [teams,   setTeams]   = useState([])
+  const [tab,       setTab]       = useState('task')
+  const [tasks,     setTasks]     = useState([])
+  const [teams,     setTeams]     = useState([])
   const [employees, setEmployees] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading,   setLoading]   = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -330,8 +357,8 @@ export default function AssignPage() {
         getAllEmployees().catch(() => ({ data: [] })),
       ])
       setTasks(Array.isArray(tRes.data) ? tRes.data : [])
-      setTeams(tmRes.data || [])
-      setEmployees(eRes.data || [])
+      setTeams(Array.isArray(tmRes.data) ? tmRes.data : [])
+      setEmployees(Array.isArray(eRes.data) ? eRes.data : [])
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }, [])
@@ -339,9 +366,9 @@ export default function AssignPage() {
   useEffect(() => { load() }, [load])
 
   const TABS = [
-    { key: 'task',     label: '🎯 Assign Task',     desc: 'Assign unassigned task to team & employee' },
-    { key: 'team',     label: '👥 Assign to Team',  desc: 'Add employee to a team' },
-    { key: 'reassign', label: '🔄 Reassign Task',    desc: 'Change task assignee' },
+    { key: 'task',     label: '🎯 Assign Task',    desc: 'Assign unassigned task to team & employee' },
+    { key: 'team',     label: '👥 Assign to Team', desc: 'Add employee to a team' },
+    { key: 'reassign', label: '🔄 Reassign Task',  desc: 'Change task assignee' },
   ]
 
   return (
@@ -354,7 +381,7 @@ export default function AssignPage() {
         </div>
 
         {/* Tab bar */}
-        <div style={{ display: 'flex', gap: 8, background: T.colors.bg.card, border: `1px solid ${T.colors.bg.border}`, borderRadius: T.radius.lg, padding: 6 }}>
+        <div className="as-tabs-bar">
           {TABS.map(t => (
             <button key={t.key} className="as-tab" onClick={() => setTab(t.key)}
               style={{ flex: 1, background: tab === t.key ? T.gradients.brand : 'transparent', color: tab === t.key ? '#fff' : T.colors.text.secondary, boxShadow: tab === t.key ? '0 2px 8px rgba(99,102,241,0.25)' : 'none' }}>

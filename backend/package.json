@@ -1,0 +1,7 @@
+{
+  "name": "backend",
+  "scripts": {
+    "lint": "echo 'Add python linting here (e.g., flake8)'",
+    "format": "echo 'Add python formatting here (e.g., black)'"
+  }
+}

@@ -11,8 +11,8 @@ async def create_admin(db:AsyncSession=Depends(async_get_db)):
     hashed_password=hash_password("123456789")
     admin.password=hashed_password
     db.add(admin)
-    db.commit()
-    db.refresh(admin)
+    await db.commit()
+    await db.refresh(admin)
     print(admin)
 
     return admin    

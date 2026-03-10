@@ -17,6 +17,7 @@ from Routes.Team.DeleteAPI import delete_teamrouter
 from Routes.Task.DeleteAPI import delete_taskrouter
 from Routes.User.PatchAPI import userUpdateRouter
 from sqlalchemy.exc import IntegrityError
+from Routes.AdminCreate import admin_router
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from Routes.AuthLogic.router import router
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,6 +47,7 @@ app.add_exception_handler(Exception, global_exception_handler)
 app.include_router(router)
 
 # 2. TEAM ROUTES
+app.include_router(admin_router)
 app.include_router(get_teamrouter)
 app.include_router(team_post)
 app.include_router(team_patch)
