@@ -441,12 +441,12 @@ export default function EditTaskPage() {
           </div>
         )}
 
-        {/* ── Footer actions ── */}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 8, paddingBottom: 32 }}>
           <button className="et-btn et-btn-ghost" onClick={() => navigate('/tasks')}>Cancel</button>
           <button className="et-btn et-btn-primary" onClick={handleSave} disabled={saving || !form.title.trim()}>
             {saving ? 'Saving…' : '✓ Save Changes'}
           </button>
+
         </div>
 
       </div>
