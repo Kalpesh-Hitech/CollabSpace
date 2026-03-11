@@ -44,6 +44,10 @@ app.add_middleware(
 )
 app.add_exception_handler(Exception, global_exception_handler)
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 # 1. AUTH / LOGIN ROUTES
 app.include_router(router)
 
